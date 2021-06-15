@@ -98,12 +98,13 @@ open class IdeaDependencyManager @Inject constructor(
         }
     }
 
-    private fun resolveSources(project: Project, version: String): File? {
+    private fun resolveSources(project: Project, version: String, type: String): File? {
         info(context, "Adding IDE sources repository")
         try {
+            val forPyCharm = isPyCharmType(type)
             val dependency = project.dependencies.create(
-                group = "com.jetbrains.intellij.idea",
-                name = "ideaIC",
+                group = if (forPyCharm) "com.jetbrains.intellij.pycharm" else "com.jetbrains.intellij.idea",
+                name = if (forPyCharm) "pycharmPC" else "ideaIC",
                 version = version,
                 classifier = "sources",
                 extension = "jar",
@@ -204,7 +205,8 @@ open class IdeaDependencyManager @Inject constructor(
                 }
 
                 if (dependency.sources != null) {
-                    val artifact = IntellijIvyArtifact(dependency.sources, "ideaIC", "jar", "sources", "sources")
+                    val name = if (isDependencyOnPyCharm(dependency)) "pycharmPC" else "ideaIC"
+                    val artifact = IntellijIvyArtifact(dependency.sources, name, "jar", "sources", "sources")
                     artifact.conf = "sources"
                     addArtifact(artifact)
                 }
@@ -220,6 +222,14 @@ open class IdeaDependencyManager @Inject constructor(
             "org.jetbrains.kotlin" == it.group && isKotlinRuntime(it.name)
         }
 
+    private fun isDependencyOnPyCharm(dependency: IdeaDependency): Boolean {
+        return dependency.name == "pycharmPY" || dependency.name == "pycharmPC"
+    }
+
+    private fun isPyCharmType(type: String): Boolean {
+        return type == "PY" || type == "PC"
+    }
+
     fun resolveRemote(project: Project, version: String, type: String, sources: Boolean, extraDependencies: List<String>): IdeaDependency {
         val releaseType = releaseType(version)
         debug(context, "Adding IDE repository: $repositoryUrl/$releaseType")
@@ -234,7 +244,7 @@ open class IdeaDependencyManager @Inject constructor(
         } else if (type == "CL") {
             dependencyGroup = "com.jetbrains.intellij.clion"
             dependencyName = "clion"
-        } else if (type == "PY" || type == "PC") {
+        } else if (isPyCharmType(type)) {
             dependencyGroup = "com.jetbrains.intellij.pycharm"
             dependencyName = "pycharm$type"
         } else if (type == "GO") {
@@ -260,7 +270,7 @@ open class IdeaDependencyManager @Inject constructor(
         info(context, "IDE dependency cache directory: $classesDirectory")
         val buildNumber = ideBuildNumber(classesDirectory)
         val sourcesDirectory = when {
-            hasSources -> resolveSources(project, version)
+            hasSources -> resolveSources(project, version, type)
             else -> null
         }
         val resolvedExtraDependencies = resolveExtraDependencies(project, version, extraDependencies)
